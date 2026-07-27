@@ -77,7 +77,15 @@ macro_rules! serve_fn {
                 mc_notify.notify_one();
             }
 
-            let wrk = crate::workers::Worker::new(ctx, acceptor, handler, rth, target, metrics.0);
+            let wrk = crate::workers::Worker::new(
+                ctx,
+                acceptor,
+                handler,
+                rth,
+                target,
+                metrics.0,
+                cfg.graceful_shutdown_timeout,
+            );
             let tasks = wrk.tasks.clone();
 
             let ml_cvar = cvar.clone();
@@ -204,6 +212,7 @@ macro_rules! serve_fn {
                 mc_notify.notify_one();
                 None
             };
+            let graceful_shutdown_timeout = cfg.graceful_shutdown_timeout;
 
             for thread_id in 0..cfg.threads {
                 log::info!("Started worker-{} runtime-{}", worker_id, thread_id + 1);
@@ -230,7 +239,15 @@ macro_rules! serve_fn {
                         metrics.1.clone(),
                     );
                     let rth = rt.handler();
-                    let wrk = crate::workers::Worker::new(ctx, acceptor, handler, rth, target, metrics.0);
+                    let wrk = crate::workers::Worker::new(
+                        ctx,
+                        acceptor,
+                        handler,
+                        rth,
+                        target,
+                        metrics.0,
+                        graceful_shutdown_timeout,
+                    );
                     let local = tokio::task::LocalSet::new();
                     let tasks = wrk.tasks.clone();
 
@@ -311,6 +328,7 @@ macro_rules! serve_fn {
             let py_threads = cfg.py_threads;
             let py_threads_idle_timeout = cfg.py_threads_idle_timeout;
             let backpressure = cfg.backpressure;
+            let graceful_shutdown_timeout = cfg.graceful_shutdown_timeout;
 
             let (stx, srx) = tokio::sync::watch::channel(false);
             let py_loop = Arc::new(event_loop.clone().unbind());
@@ -324,7 +342,15 @@ macro_rules! serve_fn {
                     metrics.1.clone(),
                 );
                 let rth = rt.handler();
-                let wrk = crate::workers::Worker::new(ctx, acceptor, handler, rth, target, metrics.0);
+                let wrk = crate::workers::Worker::new(
+                    ctx,
+                    acceptor,
+                    handler,
+                    rth,
+                    target,
+                    metrics.0,
+                    graceful_shutdown_timeout,
+                );
                 let tasks = wrk.tasks.clone();
 
                 rt.inner.block_on(async move {

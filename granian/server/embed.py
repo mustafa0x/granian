@@ -184,6 +184,7 @@ class Server(AbstractServer[AsyncWorker]):
                 self.blocking_threads,
                 self.blocking_threads_idle_timeout,
                 self.backpressure,
+                self.graceful_shutdown_timeout,
                 self.task_impl,
                 self.http,
                 self.http1_settings,
@@ -210,6 +211,7 @@ class Server(AbstractServer[AsyncWorker]):
         blocking_threads: int,
         blocking_threads_idle_timeout: int,
         backpressure: int,
+        graceful_shutdown_timeout: int | None,
         task_impl: TaskImpl,
         http_mode: HTTPModes,
         http1_settings: HTTP1Settings | None,
@@ -247,6 +249,7 @@ class Server(AbstractServer[AsyncWorker]):
             static_path,
             *ssl_ctx,
             (None, None),
+            graceful_shutdown_timeout,
         )
         serve = worker.serve_async_uds if (sock[0] or sock[1]).is_uds() else worker.serve_async
         scheduler = _new_cbscheduler(loop, wcallback, impl_asyncio=task_impl == TaskImpl.asyncio)
@@ -266,6 +269,7 @@ class Server(AbstractServer[AsyncWorker]):
         blocking_threads: int,
         blocking_threads_idle_timeout: int,
         backpressure: int,
+        graceful_shutdown_timeout: int | None,
         task_impl: TaskImpl,
         http_mode: HTTPModes,
         http1_settings: HTTP1Settings | None,
@@ -312,6 +316,7 @@ class Server(AbstractServer[AsyncWorker]):
             static_path,
             *ssl_ctx,
             (None, None),
+            graceful_shutdown_timeout,
         )
         serve = worker.serve_async_uds if (sock[0] or sock[1]).is_uds() else worker.serve_async
         scheduler = _new_cbscheduler(loop, wcallback, impl_asyncio=task_impl == TaskImpl.asyncio)
@@ -332,6 +337,7 @@ class Server(AbstractServer[AsyncWorker]):
         blocking_threads: int,
         blocking_threads_idle_timeout: int,
         backpressure: int,
+        graceful_shutdown_timeout: int | None,
         task_impl: TaskImpl,
         http_mode: HTTPModes,
         http1_settings: HTTP1Settings | None,
@@ -372,6 +378,7 @@ class Server(AbstractServer[AsyncWorker]):
             static_path,
             *ssl_ctx,
             (None, None),
+            graceful_shutdown_timeout,
         )
         serve = worker.serve_async_uds if (sock[0] or sock[1]).is_uds() else worker.serve_async
         scheduler = _new_cbscheduler(loop, wcallback, impl_asyncio=task_impl == TaskImpl.asyncio)

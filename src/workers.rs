@@ -92,6 +92,7 @@ pub(crate) struct WorkerConfig {
     pub py_threads: usize,
     pub py_threads_idle_timeout: u64,
     pub backpressure: usize,
+    pub graceful_shutdown_timeout: Option<std::time::Duration>,
     pub http_mode: String,
     pub http1_opts: HTTP1Config,
     pub http2_opts: HTTP2Config,
@@ -127,6 +128,7 @@ impl WorkerConfig {
         py_threads: usize,
         py_threads_idle_timeout: u64,
         backpressure: usize,
+        graceful_shutdown_timeout: Option<u64>,
         http_mode: &str,
         http1_opts: HTTP1Config,
         http2_opts: HTTP2Config,
@@ -164,6 +166,7 @@ impl WorkerConfig {
             py_threads,
             py_threads_idle_timeout,
             backpressure,
+            graceful_shutdown_timeout: graceful_shutdown_timeout.map(std::time::Duration::from_secs),
             http_mode: http_mode.into(),
             http1_opts,
             http2_opts,
@@ -296,6 +299,7 @@ pub(crate) struct Worker<C, A, H, F, M> {
     pub tasks: tokio_util::task::TaskTracker,
     target: F,
     metrics: M,
+    graceful_shutdown_timeout: Option<std::time::Duration>,
 }
 
 impl<C, A, H, F, M, Ret> Worker<C, A, H, F, M>
@@ -311,7 +315,15 @@ where
         + Copy,
     Ret: Future<Output = crate::http::HTTPResponse>,
 {
-    pub fn new(ctx: C, acceptor: A, handler: H, rt: crate::runtime::RuntimeRef, target: F, metrics: M) -> Self {
+    pub fn new(
+        ctx: C,
+        acceptor: A,
+        handler: H,
+        rt: crate::runtime::RuntimeRef,
+        target: F,
+        metrics: M,
+        graceful_shutdown_timeout: Option<std::time::Duration>,
+    ) -> Self {
         Self {
             ctx,
             acceptor,
@@ -320,6 +332,7 @@ where
             tasks: tokio_util::task::TaskTracker::new(),
             target,
             metrics,
+            graceful_shutdown_timeout,
         }
     }
 }
@@ -545,18 +558,21 @@ pub(crate) struct WorkerHandlerHA<U, M> {
 
 struct WorkerHandleH1<U, M> {
     opts: HTTP1Config,
+    graceful_shutdown_timeout: Option<std::time::Duration>,
     metrics: M,
     _upgrades: PhantomData<U>,
 }
 
 struct WorkerHandleH2<M> {
     opts: HTTP2Config,
+    graceful_shutdown_timeout: Option<std::time::Duration>,
     metrics: M,
 }
 
 struct WorkerHandleHA<U, M> {
     opts_h1: HTTP1Config,
     opts_h2: HTTP2Config,
+    graceful_shutdown_timeout: Option<std::time::Duration>,
     metrics: M,
     _upgrades: PhantomData<U>,
 }
@@ -577,6 +593,7 @@ where
     fn handle(&self) -> impl WorkerHandle<I, S> {
         WorkerHandleH1 {
             opts: self.handler.opts.clone(),
+            graceful_shutdown_timeout: self.graceful_shutdown_timeout,
             metrics: self.handler.metrics.clone(),
             _upgrades: PhantomData::<WorkerMarkerConnNoUpgrades>,
         }
@@ -595,6 +612,7 @@ where
     fn handle(&self) -> impl WorkerHandle<I, S> {
         WorkerHandleH1 {
             opts: self.handler.opts.clone(),
+            graceful_shutdown_timeout: self.graceful_shutdown_timeout,
             metrics: self.handler.metrics.clone(),
             _upgrades: PhantomData::<WorkerMarkerConnUpgrades>,
         }
@@ -613,6 +631,7 @@ where
     fn handle(&self) -> impl WorkerHandle<I, S> {
         WorkerHandleH2 {
             opts: self.handler.opts.clone(),
+            graceful_shutdown_timeout: self.graceful_shutdown_timeout,
             metrics: self.handler.metrics.clone(),
         }
     }
@@ -631,6 +650,7 @@ where
         WorkerHandleHA {
             opts_h1: self.handler.opts_h1.clone(),
             opts_h2: self.handler.opts_h2.clone(),
+            graceful_shutdown_timeout: self.graceful_shutdown_timeout,
             metrics: self.handler.metrics.clone(),
             _upgrades: PhantomData::<WorkerMarkerConnNoUpgrades>,
         }
@@ -650,6 +670,7 @@ where
         WorkerHandleHA {
             opts_h1: self.handler.opts_h1.clone(),
             opts_h2: self.handler.opts_h2.clone(),
+            graceful_shutdown_timeout: self.graceful_shutdown_timeout,
             metrics: self.handler.metrics.clone(),
             _upgrades: PhantomData::<WorkerMarkerConnUpgrades>,
         }
@@ -679,6 +700,16 @@ macro_rules! conn_handle_h1_impl {
             },
             _ = $sig.wait() => {
                 conn.as_mut().graceful_shutdown();
+
+                if let Some(timeout) = $self.graceful_shutdown_timeout {
+                    if tokio::time::timeout(timeout, conn.as_mut()).await.is_err() {
+                        log::debug!(
+                            "Connection did not close within {:?} during shutdown; dropping.",
+                            timeout
+                        );
+                    }
+                    done = true;
+                }
             }
         }
         if !done {
@@ -722,6 +753,16 @@ macro_rules! conn_handle_ha_impl {
             },
             _ = $sig.wait() => {
                 conn.as_mut().graceful_shutdown();
+
+                if let Some(timeout) = $self.graceful_shutdown_timeout {
+                    if tokio::time::timeout(timeout, conn.as_mut()).await.is_err() {
+                        log::debug!(
+                            "Connection did not close within {:?} during shutdown; dropping.",
+                            timeout
+                        );
+                    }
+                    done = true;
+                }
             }
         }
         if !done {
@@ -756,6 +797,16 @@ macro_rules! conn_handle_h2_impl {
             },
             _ = $sig.wait() => {
                 conn.as_mut().graceful_shutdown();
+
+                if let Some(timeout) = $self.graceful_shutdown_timeout {
+                    if tokio::time::timeout(timeout, conn.as_mut()).await.is_err() {
+                        log::debug!(
+                            "Connection did not close within {:?} during shutdown; dropping.",
+                            timeout
+                        );
+                    }
+                    done = true;
+                }
             }
         }
         if !done {
