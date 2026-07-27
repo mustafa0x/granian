@@ -304,6 +304,13 @@ Options:
                                   The maximum amount of memory (in MiB) a
                                   worker can consume before respawn  [env var:
                                   GRANIAN_WORKERS_MAX_RSS; x>=1]
+  --graceful-shutdown-timeout DURATION
+                                  The maximum amount of time in seconds (or a
+                                  human-readable duration) to wait for active
+                                  connections to close during shutdown before
+                                  force-closing them  [env var:
+                                  GRANIAN_GRACEFUL_SHUTDOWN_TIMEOUT; default:
+                                  (disabled); 0<=x<=1800]
   --workers-kill-timeout DURATION
                                   The amount of time in seconds (or a human-
                                   readable duration) to wait for killing
